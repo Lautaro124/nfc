@@ -1,116 +1,119 @@
-
 #include <Wire.h>
-#include <Arduino.h>
-#include <SPI.h>
 #include <Adafruit_PN532.h>
-#include <SPIFFS.h>
+#include <vector>
 
 #define PN532_SCK 16
 #define PN532_MOSI 17
 #define PN532_SS 18
 #define PN532_MISO 19
+
+
+bool compareUID(uint8_t *uid1, uint8_t uid1Length, uint8_t *uid2, uint8_t uid2Length);
+
 Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 
-void setup(void)
+struct Tarjeta
+{
+  uint8_t uid[7];
+  uint32_t codigo;
+  bool cargada;
+};
+
+std::vector<Tarjeta> tarjetasGimnasio;
+
+void setup()
 {
   Serial.begin(115200);
-  while (!Serial)
-    delay(10);
-  Serial.println("Hello!");
+  Serial.println("Inicializando NFC...");
 
-  if (!SPIFFS.begin(true))
-  {
-    Serial.println("An Error has occurred while mounting SPIFFS");
-    return;
-  }
-
-  File file = SPIFFS.open("/db.txt");
-  if (!file)
-  {
-    Serial.println("Failed to open file for reading");
-    return;
-  }
-
-  Serial.println("File Content:");
-  while (file.available())
-  {
-    Serial.write(file.read());
-  }
-  file.close();
-  //// ---------------------
   nfc.begin();
+
   uint32_t versiondata = nfc.getFirmwareVersion();
   if (!versiondata)
   {
-    Serial.print("Didn't find PN53x board");
+    Serial.print("Error al detectar el PN532. Asegúrate de que esté conectado correctamente.");
     while (1)
       ;
   }
 
-  Serial.print("\nFound chip PN5");
-  Serial.println((versiondata >> 24) & 0xFF, HEX);
-  Serial.print("\nFirmware ver. ");
-  Serial.print((versiondata >> 16) & 0xFF, DEC);
-  Serial.print('.');
-  Serial.println((versiondata >> 8) & 0xFF, DEC);
-
-  nfc.setPassiveActivationRetries(0xFF);
-
-  Serial.println("Waiting for an ISO14443A card");
+  nfc.SAMConfig();
+  Serial.println("Listo para leer tarjetas NFC.");
 }
-
-void loop(void)
+void loop()
 {
-
-  Serial.println("Waiting for an ISO14443A card");
-  boolean success;
+  uint8_t success;
   uint8_t uid[] = {0, 0, 0, 0, 0, 0, 0};
   uint8_t uidLength;
 
-  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength);
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
 
   if (success)
   {
-    Serial.println("Found an NFC card!");
+    Serial.println("\nTarjeta detectada!");
 
-    Serial.print("UID Length: ");
-    Serial.print(uidLength, DEC);
-    Serial.println(" bytes");
-    Serial.print("UID Value: ");
-    for (uint8_t i = 0; i < uidLength; i++)
+    bool tarjetaEncontrada = false;
+    Serial.print("\nTarketa size: ");
+    Serial.print(tarjetasGimnasio.size());
+    for (int i = 0; i < tarjetasGimnasio.size(); i++)
     {
-      Serial.print(" 0x");
-      Serial.print(uid[i], HEX);
-    }
-    String uidString = "";
-    for (uint8_t i = 0; i < uidLength; i++)
-    {
-      if (uid[i] < 0x10)
-        uidString += "0";
-      uidString += String(uid[i], HEX);
+      bool comparable = compareUID(uid, uidLength, tarjetasGimnasio[i].uid, sizeof(tarjetasGimnasio[i].uid));
+      if (comparable)
+      {
+        Serial.print("\nTarjeta cargada - Código: ");
+        Serial.println(tarjetasGimnasio[i].codigo);
+        tarjetaEncontrada = true;
+        break;
+      }
     }
 
-    File file = SPIFFS.open("/db.txt", "w");
-    if (!file)
+    if (!tarjetaEncontrada)
     {
-      Serial.println("Error opening file for writing");
-      return;
-    }
+      Serial.println("\nEsta tarjeta no está cargada en la lista.");
 
-    int bytesWritten = file.print(uidString);
+      char respuesta;
+      Serial.print("\n¿Deseas agregar esta tarjeta? (S/N): ");
+      while (!Serial.available())
+      {
+        // Espera a que el usuario ingrese una respuesta
+      }
+      respuesta = Serial.read();
 
-    if (bytesWritten > 0)
-    {
-      Serial.println("\nFile was written");
-      Serial.println(bytesWritten);
-    }
-    else
-    {
-      Serial.println("File write failed");
-    }
-    Serial.print(file.readString());
+      if (respuesta == 'S' || respuesta == 's')
+      {
+        uint32_t nuevoCodigo;
+        Serial.print("\nIngresa el código para esta tarjeta: ");
+        while (!Serial.available())
+        {
+          // Espera a que el usuario ingrese el código
+        }
+        nuevoCodigo = Serial.parseInt();
 
-    file.close();
-    Serial.println("");
+        // Agrega la nueva tarjeta a la lista
+        tarjetasGimnasio.push_back({{uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]}, nuevoCodigo, true});
+
+        Serial.print("\nTarjeta agregada - Código: ");
+        Serial.println(nuevoCodigo);
+      }
+    }
   }
+}
+
+bool compareUID(uint8_t *uid1, uint8_t uid1Length, uint8_t *uid2, uint8_t uid2Length)
+{
+  if (uid1Length != uid2Length)
+  {
+    Serial.print("\nInvalid UID length");
+    return false;
+  }
+
+  for (uint8_t i = 0; i < uid1Length; i++)
+  {
+    if (uid1[i] != uid2[i])
+    {
+      Serial.print("\nInvalid UID");
+      return false;
+    }
+  }
+
+  return true;
 }
