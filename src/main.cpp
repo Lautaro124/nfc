@@ -13,10 +13,10 @@ bool compareUID(uint8_t *uid1, uint8_t uid1Length, uint8_t *uid2, uint8_t uid2Le
 
 Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 bool isReadModeActive;
-
 struct Tarjeta
 {
   uint8_t uid[7];
+  uint8_t uidLength;
   uint32_t codigo;
   bool cargada;
 };
@@ -40,7 +40,10 @@ void setup()
 
   nfc.SAMConfig();
   Serial.println("Listo para leer tarjetas NFC.");
+}
 
+void loop()
+{
   char respuesta;
   Serial.print("Quieres usar el modo lectura de la tarjeta? (S/N): ");
   while (!Serial.available())
@@ -49,10 +52,6 @@ void setup()
   }
   respuesta = Serial.read();
   isReadModeActive = respuesta == 'S' || respuesta == 's';
-}
-
-void loop()
-{
   if (isReadModeActive)
   {
     readMode();
@@ -134,7 +133,7 @@ void readMode()
         nuevoCodigo = Serial.parseInt();
 
         // Agrega la nueva tarjeta a la lista
-        tarjetasGimnasio.push_back({{uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]}, nuevoCodigo, true});
+        tarjetasGimnasio.push_back({{uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]}, uidLength, nuevoCodigo, true});
 
         Serial.print("\nTarjeta agregada - Código: ");
         Serial.println(nuevoCodigo);
@@ -145,5 +144,41 @@ void readMode()
 
 void writeMode()
 {
-  Serial.print("El usuario desea usar la tarjeta AJAJJAJAJAJ que pena");
+  Serial.println("Modo de escritura activado.");
+  Serial.println("Tarjetas guardadas:");
+
+  for (int i = 0; i < tarjetasGimnasio.size(); i++)
+  {
+    Serial.print("Tarjeta ");
+    Serial.print(i + 1);
+    Serial.print(": Código - ");
+    Serial.println(tarjetasGimnasio[i].codigo);
+  }
+
+  Serial.print("Selecciona el número de tarjeta para escribir (1 - ");
+  Serial.print(tarjetasGimnasio.size());
+  Serial.print(") o 0 para salir: ");
+
+  while (!Serial.available())
+  {
+    // Espera a que el usuario ingrese una respuesta
+  }
+
+  int seleccion = Serial.parseInt();
+
+  if (seleccion >= 1 && seleccion <= tarjetasGimnasio.size())
+  {
+    // El usuario seleccionó una tarjeta válida
+    Serial.print("Escribir en la tarjeta ");
+    Serial.print(seleccion);
+    Serial.print(": Código - ");
+    Serial.println(tarjetasGimnasio[seleccion - 1].codigo);
+    uint8_t bloqueAEscribir = 4; // Número de bloque en el que deseas escribir
+    nfc.mifareclassic_WriteDataBlock(bloqueAEscribir, tarjetasGimnasio[seleccion - 1].uid);
+    Serial.println("Escritura completada.");
+  }
+  else
+  {
+    Serial.println("Selección no válida. Por favor, selecciona un número de tarjeta válido o 0 para salir.");
+  }
 }
