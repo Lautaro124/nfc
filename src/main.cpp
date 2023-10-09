@@ -7,10 +7,12 @@
 #define PN532_SS 18
 #define PN532_MISO 19
 
-
+void readMode();
+void writeMode();
 bool compareUID(uint8_t *uid1, uint8_t uid1Length, uint8_t *uid2, uint8_t uid2Length);
 
 Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
+bool isReadModeActive;
 
 struct Tarjeta
 {
@@ -38,8 +40,50 @@ void setup()
 
   nfc.SAMConfig();
   Serial.println("Listo para leer tarjetas NFC.");
+
+  char respuesta;
+  Serial.print("Quieres usar el modo lectura de la tarjeta? (S/N): ");
+  while (!Serial.available())
+  {
+    // Espera a que el usuario ingrese una respuesta
+  }
+  respuesta = Serial.read();
+  isReadModeActive = respuesta == 'S' || respuesta == 's';
 }
+
 void loop()
+{
+  if (isReadModeActive)
+  {
+    readMode();
+  }
+  else
+  {
+    writeMode();
+  }
+}
+
+bool compareUID(uint8_t *uid1, uint8_t uid1Length, uint8_t *uid2, uint8_t uid2Length)
+{
+  if (uid1Length != uid2Length)
+  {
+    Serial.print("\nInvalid UID length");
+    return false;
+  }
+
+  for (uint8_t i = 0; i < uid1Length; i++)
+  {
+    if (uid1[i] != uid2[i])
+    {
+      Serial.print("\nInvalid UID");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void readMode()
 {
   uint8_t success;
   uint8_t uid[] = {0, 0, 0, 0, 0, 0, 0};
@@ -62,6 +106,7 @@ void loop()
         Serial.print("\nTarjeta cargada - Código: ");
         Serial.println(tarjetasGimnasio[i].codigo);
         tarjetaEncontrada = true;
+
         break;
       }
     }
@@ -98,22 +143,7 @@ void loop()
   }
 }
 
-bool compareUID(uint8_t *uid1, uint8_t uid1Length, uint8_t *uid2, uint8_t uid2Length)
+void writeMode()
 {
-  if (uid1Length != uid2Length)
-  {
-    Serial.print("\nInvalid UID length");
-    return false;
-  }
-
-  for (uint8_t i = 0; i < uid1Length; i++)
-  {
-    if (uid1[i] != uid2[i])
-    {
-      Serial.print("\nInvalid UID");
-      return false;
-    }
-  }
-
-  return true;
+  Serial.print("El usuario desea usar la tarjeta AJAJJAJAJAJ que pena");
 }
